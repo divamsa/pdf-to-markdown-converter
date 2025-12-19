@@ -17,10 +17,17 @@
                 .upload-icon { font-size: 3em; margin-bottom: 15px; }
                 .button { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 12px 30px; border-radius: 8px; cursor: pointer; font-size: 1em; transition: all 0.3s ease; margin-top: 15px; }
                 .button:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3); }
+                .button:disabled { opacity: 0.5; cursor: not-allowed; }
+                .button-group { display: flex; gap: 15px; margin-top: 25px; justify-content: center; flex-wrap: wrap; }
+                .btn-select { flex: 1; min-width: 150px; background: #667eea; }
+                .btn-convert { flex: 1; min-width: 150px; background: #4caf50; display: none; }
+                .btn-convert.active { display: inline-block; }
                 .progress-section { margin-bottom: 30px; display: none; }
                 .progress-section.active { display: block; }
                 .progress-bar { width: 100%; height: 8px; background: #e0e0e0; border-radius: 4px; overflow: hidden; margin-bottom: 10px; }
                 .progress-fill { height: 100%; background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); width: 0%; transition: width 0.3s ease; }
+                .file-info { background: #e3f2fd; border-left: 4px solid #2196f3; padding: 15px; border-radius: 4px; margin-bottom: 20px; color: #1976d2; display: none; }
+                .file-info.active { display: block; }
                 .output-section { margin-top: 30px; display: none; }
                 .output-section.active { display: block; }
                 .tabs { display: flex; border-bottom: 2px solid #e0e0e0; margin-bottom: 20px; gap: 10px; }
@@ -35,6 +42,7 @@
                 .download-markdown:hover { background: #45a049; }
                 .download-zip { background: #ff9800; color: white; }
                 .download-zip:hover { background: #e68900; }
+                .save-location { background: #fff3e0; border-left: 4px solid #ff9800; padding: 15px; border-radius: 4px; margin-top: 20px; color: #e65100; }
                 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px; }
                 .stat-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; border-radius: 8px; text-align: center; }
                 .stat-card .number { font-size: 1.8em; font-weight: bold; }
@@ -51,8 +59,12 @@
                             <h2>PDFファイルをアップロード</h2>
                             <p>ドラッグ&ドロップするか、クリックして選択してください</p>
                             <input type="file" id="fileInput" style="display:none" accept=".pdf" />
-                            <button class="button" onclick="document.getElementById('fileInput').click()">ファイルを選択</button>button>
+                            <div class="button-group">
+                                            <button class="button btn-select" onclick="document.getElementById('fileInput').click()">📁 ファイルを選択</button>button>
+                                            <button class="button btn-convert" id="convertBtn" onclick="startConversion()">🔄 Markdownに変換</button>button>
+                            </div>div>
                 </div>div>
+                <div class="file-info" id="fileInfo"></div>div>
                 <div class="progress-section" id="progressSection">
                             <div class="progress-bar"><div class="progress-fill" id="progressFill"></div>div></div>div>
                             <div style="color: #666; font-size: 0.9em; text-align: center;" id="progressText">処理中...</div>div>
@@ -69,14 +81,19 @@
                             <div id="images" class="tab-content"><div id="imagesContainer"></div>div></div>div>
                             <div class="download-buttons">
                                             <button class="download-btn download-markdown" onclick="downloadMarkdown()">📝 Markdownをダウンロード</button>button>
-                                            <button class="download-btn download-zip" onclick="downloadAsZip()">📦 Markdown + 画像をダウンロード</button>button>
+                                            <button class="download-btn download-zip" onclick="downloadAsZip()">📦 ZIP形式でダウンロード</button>button>
+                            </div>div>
+                            <div class="save-location">
+                                            <strong>💾 保存場所:</strong><br/>
+                                            <em>ダウンロードボタンをクリックすると、ファイルはあなたのブラウザの「ダウンロードフォルダ」に保存されます。<br/>
+                                                            ファイルの保存位置は、ブラウザの設定によって異なる場合があります。</em>
                             </div>div>
                 </div>div>
         </div>div>
       <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"><\/script>
       <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"><\/script>
       <script>
-          let appState = { pdfData: null, sections: [], images: [], markdownContent: '', filename: '' };
+          let appState = { pdfData: null, sections: [], images: [], markdownContent: '', filename: '', file: null };
               const uploadArea = document.getElementById('uploadArea');
               const fileInput = document.getElementById('fileInput');
               uploadArea.addEventListener('click', () => fileInput.click());
@@ -84,37 +101,44 @@
               uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
               uploadArea.addEventListener('drop', e => { e.preventDefault(); uploadArea.classList.remove('dragover'); if (e.dataTransfer.files.length > 0) handleFileSelect(e.dataTransfer.files[0]); });
               fileInput.addEventListener('change', e => { if (e.target.files.length > 0) handleFileSelect(e.target.files[0]); });
-              async function handleFileSelect(file) {
+              function handleFileSelect(file) {
                             if (file.type !== 'application/pdf') { alert('PDFファイルのみサポートしています'); return; }
-                                          appState.filename = file.name.replace('.pdf', '');
-                            document.getElementById('progressSection').classList.add('active');
+                                          appState.file = file;
+                            appState.filename = file.name.replace('.pdf', '');
+                            document.getElementById('fileInfo').innerHTML = '<strong>✅ ファイル選択済み:</strong> ' + file.name + ' (' + (file.size / 1024 / 1024).toFixed(2) + ' MB)';
+                            document.getElementById('fileInfo').classList.add('active');
+                            document.getElementById('convertBtn').classList.add('active');
+              }
+              function startConversion() {
+                            if (!appState.file) { alert('PDFファイルを選択してください'); return; }
+                                          document.getElementById('progressSection').classList.add('active');
                             document.getElementById('outputSection').classList.remove('active');
+                            processPDF(appState.file);
+              }
+              async function processPDF(file) {
                             try {
                                               const arrayBuffer = await file.arrayBuffer();
-                                              await processPDF(arrayBuffer);
+                                              const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                                              const totalPages = pdf.numPages;
+                                              appState.sections = []; appState.images = [];
+                                              for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+                                                                    updateProgress(pageNum, totalPages);
+                                                                    const page = await pdf.getPage(pageNum);
+                                                                    const textContent = await page.getTextContent();
+                                                                    const textItems = []; let currentLine = '';
+                                                                    textContent.items.forEach(item => {
+                                                                                              if (item.str) currentLine += item.str;
+                                                                                              if (item.hasEOL) { if (currentLine.trim()) textItems.push(currentLine.trim()); currentLine = ''; }
+                                                                    });
+                                                                    if (currentLine.trim()) textItems.push(currentLine.trim());
+                                                                                          const section = { pageNum, title: textItems.length > 0 && textItems[0].length < 100 ? textItems[0] : 'ページ ' + pageNum, content: textItems.length > 0 && textItems[0].length < 100 ? textItems.slice(1) : textItems, imageRefs: [] };
+                                                                    appState.sections.push(section);
+                                                                    await extractImages(page, pageNum);
+                                              }
+                                              generateMarkdown();
                                               displayOutput();
                                               document.getElementById('outputSection').classList.add('active');
                             } catch (error) { alert('エラー: ' + error.message); console.error(error); }
-              }
-              async function processPDF(arrayBuffer) {
-                            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-                            const totalPages = pdf.numPages;
-                            appState.sections = []; appState.images = [];
-                            for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
-                                              updateProgress(pageNum, totalPages);
-                                              const page = await pdf.getPage(pageNum);
-                                              const textContent = await page.getTextContent();
-                                              const textItems = []; let currentLine = '';
-                                              textContent.items.forEach(item => {
-                                                                    if (item.str) currentLine += item.str;
-                                                                    if (item.hasEOL) { if (currentLine.trim()) textItems.push(currentLine.trim()); currentLine = ''; }
-                                              });
-                                              if (currentLine.trim()) textItems.push(currentLine.trim());
-                                                                const section = { pageNum, title: textItems.length > 0 && textItems[0].length < 100 ? textItems[0] : 'ページ ' + pageNum, content: textItems.length > 0 && textItems[0].length < 100 ? textItems.slice(1) : textItems, imageRefs: [] };
-                                              appState.sections.push(section);
-                                              await extractImages(page, pageNum);
-                            }
-                            generateMarkdown();
               }
               async function extractImages(page, pageNum) {
                             try {
@@ -140,7 +164,7 @@
               }
               function displayOutput() {
                             document.getElementById('stats').innerHTML = '<div class="stat-card"><div class="number">' + appState.sections.length + '<\/div><div>セクション<\/div><\/div><div class="stat-card"><div class="number">' + appState.images.length + '<\/div><div>図表<\/div><\/div>';
-                            document.getElementById('overview').innerHTML = '<p><strong>ファイル名:<\/strong> ' + appState.filename + '.pdf<\/p><p><strong>ページ数:<\/strong> ' + appState.sections.length + '<\/p><p><strong>図表数:<\/strong> ' + appState.images.length + '<\/p>';
+                            document.getElementById('overview').innerHTML = '<p><strong>✅ ファイル名:<\/strong> ' + appState.filename + '.pdf<\/p><p><strong>ページ数:<\/strong> ' + appState.sections.length + '<\/p><p><strong>図表数:<\/strong> ' + appState.images.length + '<\/p>';
                             document.getElementById('markdownOutput').textContent = appState.markdownContent;
                             const imagesHTML = appState.images.map((img, idx) => '<div style="display:inline-block; margin: 10px; text-align: center;"><img src="' + img.data + '" style="max-width: 200px; border-radius: 8px;" /><p style="margin-top: 5px; font-size: 0.9em;">図表 ' + (idx + 1) + '<\/p><\/div>').join('');
                             document.getElementById('imagesContainer').innerHTML = imagesHTML || '<p style="text-align: center; color: #999;">図表がありません<\/p>';
@@ -181,7 +205,7 @@
               }
           <\/script>
             </body>
-            </html></p></p></h1>
+            </html></em></strong></p></p></h1>
   </body>
       </style></title>
   </head>
