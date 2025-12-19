@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>PDF to Markdown コンバーター</title>
+      <style>
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+                .container { background: white; border-radius: 20px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3); max-width: 900px; width: 100%; padding: 40px; }
+                .header { text-align: center; margin-bottom: 40px; }
+                .header h1 { color: #333; font-size: 2.5em; margin-bottom: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+                .header p { color: #666; font-size: 1.1em; }
+                .upload-area { border: 3px dashed #667eea; border-radius: 15px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.3s ease; background: #f8f9ff; margin-bottom: 30px; }
+                .upload-area:hover { border-color: #764ba2; background: #f0f1ff; transform: scale(1.02); }
+                .upload-area.dragover { border-color: #764ba2; background: #e8ebff; box-shadow: 0 0 20px rgba(102, 126, 234, 0.3); }
+                .upload-icon { font-size: 3em; margin-bottom: 15px; }
+                .button { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 12px 30px; border-radius: 8px; cursor: pointer; font-size: 1em; transition: all 0.3s ease; margin-top: 15px; }
+                .button:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3); }
+                .progress-section { margin-bottom: 30px; display: none; }
+                .progress-section.active { display: block; }
+                .progress-bar { width: 100%; height: 8px; background: #e0e0e0; border-radius: 4px; overflow: hidden; margin-bottom: 10px; }
+                .progress-fill { height: 100%; background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); width: 0%; transition: width 0.3s ease; }
+                .output-section { margin-top: 30px; display: none; }
+                .output-section.active { display: block; }
+                .tabs { display: flex; border-bottom: 2px solid #e0e0e0; margin-bottom: 20px; gap: 10px; }
+                .tab-button { background: none; border: none; padding: 12px 20px; cursor: pointer; color: #666; font-size: 1em; font-weight: 500; border-bottom: 3px solid transparent; transition: all 0.3s ease; }
+                .tab-button.active { color: #667eea; border-bottom-color: #667eea; }
+                .tab-content { display: none; }
+                .tab-content.active { display: block; }
+                .markdown-output { background: #f5f5f5; border-radius: 8px; padding: 20px; border: 1px solid #ddd; max-height: 400px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 0.9em; line-height: 1.5; color: #333; }
+                .download-buttons { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+                .download-btn { flex: 1; min-width: 150px; padding: 12px; border-radius: 8px; border: none; cursor: pointer; font-size: 0.95em; font-weight: 600; transition: all 0.3s ease; }
+                .download-markdown { background: #4caf50; color: white; }
+                .download-markdown:hover { background: #45a049; }
+                .download-zip { background: #ff9800; color: white; }
+                .download-zip:hover { background: #e68900; }
+                .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px; }
+                .stat-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; border-radius: 8px; text-align: center; }
+                .stat-card .number { font-size: 1.8em; font-weight: bold; }
+            </style>
+  </head>
+  <body>
+        <div class="container">
+                  <div class="header">
+                                <h1>📄 PDF to Markdown</h1>
+                              <p>PDFをセクションごとにMarkdownに変換します</p>
+                  </div>div>
+                <div class="upload-area" id="uploadArea">
+                            <div class="upload-icon">📤</div>div>
+                            <h2>PDFファイルをアップロード</h2>
+                            <p>ドラッグ&ドロップするか、クリックして選択してください</p>
+                            <input type="file" id="fileInput" style="display:none" accept=".pdf" />
+                            <button class="button" onclick="document.getElementById('fileInput').click()">ファイルを選択</button>button>
+                </div>div>
+                <div class="progress-section" id="progressSection">
+                            <div class="progress-bar"><div class="progress-fill" id="progressFill"></div>div></div>div>
+                            <div style="color: #666; font-size: 0.9em; text-align: center;" id="progressText">処理中...</div>div>
+                </div>div>
+                <div class="output-section" id="outputSection">
+                            <div class="stats" id="stats"></div>div>
+                            <div class="tabs">
+                                            <button class="tab-button active" onclick="switchTab('overview')">概要</button>button>
+                                            <button class="tab-button" onclick="switchTab('markdown')">Markdown</button>button>
+                                            <button class="tab-button" onclick="switchTab('images')">図表</button>button>
+                            </div>div>
+                            <div id="overview" class="tab-content active" style="padding: 15px; background: #e3f2fd; border-radius: 4px;"></div>div>
+                            <div id="markdown" class="tab-content"><div class="markdown-output" id="markdownOutput"></div>div></div>div>
+                            <div id="images" class="tab-content"><div id="imagesContainer"></div>div></div>div>
+                            <div class="download-buttons">
+                                            <button class="download-btn download-markdown" onclick="downloadMarkdown()">📝 Markdownをダウンロード</button>button>
+                                            <button class="download-btn download-zip" onclick="downloadAsZip()">📦 Markdown + 画像をダウンロード</button>button>
+                            </div>div>
+                </div>div>
+        </div>div>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"><\/script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"><\/script>
+      <script>
+          let appState = { pdfData: null, sections: [], images: [], markdownContent: '', filename: '' };
+              const uploadArea = document.getElementById('uploadArea');
+              const fileInput = document.getElementById('fileInput');
+              uploadArea.addEventListener('click', () => fileInput.click());
+              uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+              uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+              uploadArea.addEventListener('drop', e => { e.preventDefault(); uploadArea.classList.remove('dragover'); if (e.dataTransfer.files.length > 0) handleFileSelect(e.dataTransfer.files[0]); });
+              fileInput.addEventListener('change', e => { if (e.target.files.length > 0) handleFileSelect(e.target.files[0]); });
+              async function handleFileSelect(file) {
+                            if (file.type !== 'application/pdf') { alert('PDFファイルのみサポートしています'); return; }
+                                          appState.filename = file.name.replace('.pdf', '');
+                            document.getElementById('progressSection').classList.add('active');
+                            document.getElementById('outputSection').classList.remove('active');
+                            try {
+                                              const arrayBuffer = await file.arrayBuffer();
+                                              await processPDF(arrayBuffer);
+                                              displayOutput();
+                                              document.getElementById('outputSection').classList.add('active');
+                            } catch (error) { alert('エラー: ' + error.message); console.error(error); }
+              }
+              async function processPDF(arrayBuffer) {
+                            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                            const totalPages = pdf.numPages;
+                            appState.sections = []; appState.images = [];
+                            for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+                                              updateProgress(pageNum, totalPages);
+                                              const page = await pdf.getPage(pageNum);
+                                              const textContent = await page.getTextContent();
+                                              const textItems = []; let currentLine = '';
+                                              textContent.items.forEach(item => {
+                                                                    if (item.str) currentLine += item.str;
+                                                                    if (item.hasEOL) { if (currentLine.trim()) textItems.push(currentLine.trim()); currentLine = ''; }
+                                              });
+                                              if (currentLine.trim()) textItems.push(currentLine.trim());
+                                                                const section = { pageNum, title: textItems.length > 0 && textItems[0].length < 100 ? textItems[0] : 'ページ ' + pageNum, content: textItems.length > 0 && textItems[0].length < 100 ? textItems.slice(1) : textItems, imageRefs: [] };
+                                              appState.sections.push(section);
+                                              await extractImages(page, pageNum);
+                            }
+                            generateMarkdown();
+              }
+              async function extractImages(page, pageNum) {
+                            try {
+                                              const scale = 2;
+                                              const viewport = page.getViewport({ scale });
+                                              const canvas = document.createElement('canvas');
+                                              const context = canvas.getContext('2d');
+                                              canvas.width = viewport.width; canvas.height = viewport.height;
+                                              await page.render({ canvasContext: context, viewport }).promise;
+                                              const imageData = canvas.toDataURL('image/png');
+                                              if (imageData.length > 1000) appState.images.push({ pageNum, data: imageData, filename: 'image_page_' + pageNum + '.png' });
+                            } catch (error) { console.warn('画像抽出エラー:', error); }
+              }
+              function generateMarkdown() {
+                            let md = '# ' + appState.filename + '\n\n';
+                            appState.sections.forEach((section, idx) => { md += '## ' + section.title + '\n\n*ページ: ' + section.pageNum + '*\n\n'; section.content.forEach(line => { md += line + '\n\n'; }); const pageImages = appState.images.filter(img => img.pageNum === section.pageNum); if (pageImages.length > 0) { md += '### 図表\n\n'; pageImages.forEach((img, imgIdx) => { md += '![図表 ' + (imgIdx + 1) + '](./images/' + img.filename + ')\n\n'; }); } });
+                            appState.markdownContent = md;
+              }
+              function updateProgress(current, total) {
+                            const percentage = (current / total) * 100;
+                            document.getElementById('progressFill').style.width = percentage + '%';
+                            document.getElementById('progressText').textContent = '処理中... ' + current + ' / ' + total + ' ページ (' + Math.round(percentage) + '%)';
+              }
+              function displayOutput() {
+                            document.getElementById('stats').innerHTML = '<div class="stat-card"><div class="number">' + appState.sections.length + '<\/div><div>セクション<\/div><\/div><div class="stat-card"><div class="number">' + appState.images.length + '<\/div><div>図表<\/div><\/div>';
+                            document.getElementById('overview').innerHTML = '<p><strong>ファイル名:<\/strong> ' + appState.filename + '.pdf<\/p><p><strong>ページ数:<\/strong> ' + appState.sections.length + '<\/p><p><strong>図表数:<\/strong> ' + appState.images.length + '<\/p>';
+                            document.getElementById('markdownOutput').textContent = appState.markdownContent;
+                            const imagesHTML = appState.images.map((img, idx) => '<div style="display:inline-block; margin: 10px; text-align: center;"><img src="' + img.data + '" style="max-width: 200px; border-radius: 8px;" /><p style="margin-top: 5px; font-size: 0.9em;">図表 ' + (idx + 1) + '<\/p><\/div>').join('');
+                            document.getElementById('imagesContainer').innerHTML = imagesHTML || '<p style="text-align: center; color: #999;">図表がありません<\/p>';
+                            document.getElementById('progressSection').classList.remove('active');
+              }
+              function switchTab(tabName) {
+                            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+                            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+                            document.getElementById(tabName).classList.add('active');
+                            event.target.classList.add('active');
+              }
+              function downloadMarkdown() {
+                            const element = document.createElement('a');
+                            element.setAttribute('href', 'data:text/markdown;charset=utf-8,' + encodeURIComponent(appState.markdownContent));
+                            element.setAttribute('download', appState.filename + '.md');
+                            element.style.display = 'none';
+                            document.body.appendChild(element);
+                            element.click();
+                            document.body.removeChild(element);
+              }
+              async function downloadAsZip() {
+                            const zip = new JSZip();
+                            zip.file(appState.filename + '.md', appState.markdownContent);
+                            if (appState.images.length > 0) {
+                                              const imagesFolder = zip.folder('images');
+                                              for (const img of appState.images) {
+                                                                    const imageData = img.data.split(',')[1];
+                                                                    imagesFolder.file(img.filename, imageData, { base64: true });
+                                              }
+                            }
+                                          const content = await zip.generateAsync({ type: 'blob' });
+                            const link = document.createElement('a');
+                            link.href = URL.createObjectURL(content);
+                            link.download = appState.filename + '-converted.zip';
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+              }
+          <\/script>
+            </body>
+            </html></p></p></h1>
+  </body>
+      </style></title>
+  </head>
